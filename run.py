@@ -9,8 +9,6 @@ for triangle_idx in triangle_idxs:
     cmd = [
         "python3",
         "./test.py",
-        "--triangle_idx",
-        str(triangle_idx),
         "--batch_size",
         str(batch_size),
         "--num_epochs",

@@ -1,18 +1,31 @@
 #!/usr/bin/env python3
+import torch
 import torch.nn as nn
 
-from constants import NUM_INPUT_DIM, NUM_LOD_LEVELS
+from constants import CAMERA_VECTOR_DIM, NUM_LOD_LEVELS
 
 
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.fc1 = nn.Linear(NUM_INPUT_DIM, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, NUM_LOD_LEVELS)
+        self.model = nn.ModuleList(
+            [
+                nn.Sequential(
+                    *[
+                        nn.Linear(CAMERA_VECTOR_DIM + 1, NUM_LOD_LEVELS),
+                    ]
+                )
+                for _ in range(722)
+            ]
+        )
 
-    def forward(self, x):
-        x = nn.functional.relu(self.fc1(x))
-        x = nn.functional.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
+    def forward(self, inp):
+        out = [
+            self.model[i](
+                torch.cat(
+                    (inp["prior_lod"][..., i : i + 1], inp["camera"]), dim=1
+                )
+            )
+            for i in range(722)
+        ]
+        return out

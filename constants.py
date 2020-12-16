@@ -2,11 +2,11 @@
 DATA_PATH = "./Data/"
 
 
-def get_net_path(triangle_idx, lr, batch_sz, epoch):
-    return f"./weights/updated_lod_{triangle_idx}_{lr}_{batch_sz}_{epoch}.pth"
+def get_net_path(lr, batch_sz, epoch):
+    return f"./weights_v3/whole_scene_{lr}_{batch_sz}_{epoch}.pth"
 
 
-NUM_INPUT_DIM = 734
+CAMERA_VECTOR_DIM = 12
 NUM_LOD_LEVELS = 6
 NUM_POPPING_VECTORS = 5
 NUM_TRIANGLES = 722
