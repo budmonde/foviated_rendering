@@ -12,7 +12,11 @@ class Net(nn.Module):
             [
                 nn.Sequential(
                     *[
-                        nn.Linear(CAMERA_VECTOR_DIM + 1, NUM_LOD_LEVELS),
+                        nn.Linear(CAMERA_VECTOR_DIM + 1, 10),
+                        nn.ReLU(),
+                        nn.Linear(10, 10),
+                        nn.ReLU(),
+                        nn.Linear(10, NUM_LOD_LEVELS),
                     ]
                 )
                 for _ in range(722)
