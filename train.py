@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+from collections import defaultdict
 
 import torch
 import torch.nn as nn
@@ -37,14 +38,29 @@ if __name__ == "__main__":
     criterions = [nn.CrossEntropyLoss() for _ in range(722)]
     optimizer = torch.optim.SGD(net.parameters(), lr=opt.lr, momentum=0.9)
 
+    def calculate_acc(inps, labels, outs, acc):
+        inps = inps.type(torch.LongTensor)
+        acc["total"] += torch.flatten(labels).size(0)
+        acc["tp"] += (
+            torch.logical_and(inps != labels, inps != outs).sum().item()
+        )
+        acc["tn"] += (
+            torch.logical_and(inps == labels, inps == outs).sum().item()
+        )
+        acc["fp"] += (
+            torch.logical_and(inps == labels, inps != outs).sum().item()
+        )
+        acc["fn"] += (
+            torch.logical_and(inps != labels, inps == outs).sum().item()
+        )
+
     total_iters = 0
     for epoch in range(1, opt.num_epochs + 1):
         epoch_iters = 0
 
         # Validation & Test
         with torch.no_grad():
-            val_correct = 0
-            val_total = 0
+            val_acc = defaultdict(int)
             for i, data in enumerate(val_loader):
                 inps = data["input"]
                 labels = data["output"]["updated_lod"]
@@ -52,10 +68,8 @@ if __name__ == "__main__":
                 predicted = torch.cat(
                     [extract_labels(outs) for outs in outputs], dim=1
                 )
-                val_total += torch.flatten(labels).size(0)
-                val_correct += (predicted == labels).sum().item()
-            test_correct = 0
-            test_total = 0
+                calculate_acc(inps["prior_lod"], labels, predicted, val_acc)
+            test_acc = defaultdict(int)
             for i, data in enumerate(test_loader):
                 inps = data["input"]
                 labels = data["output"]["updated_lod"]
@@ -63,13 +77,14 @@ if __name__ == "__main__":
                 predicted = torch.cat(
                     [extract_labels(outs) for outs in outputs], dim=1
                 )
-                test_total += torch.flatten(labels).size(0)
-                test_correct += (predicted == labels).sum().item()
+                calculate_acc(inps["prior_lod"], labels, predicted, test_acc)
             visualizer.plot_current_accuracy(
                 epoch,
                 {
-                    "validation": val_correct / val_total,
-                    "test": test_correct / test_total,
+                    "Val: True Positive": val_acc["tp"] / val_acc["total"],
+                    "Val: True Negative": val_acc["tn"] / val_acc["total"],
+                    "Val: False Positive": val_acc["fp"] / val_acc["total"],
+                    "Val: False Negative": val_acc["fn"] / val_acc["total"],
                 },
             )
 
