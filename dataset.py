@@ -69,9 +69,9 @@ class FoviatedLODDataset(Dataset):
 
     def __getitem__(self, idx):
         datapoint = json.load(open(self.paths[idx]))
-        prior_lod = np.array(datapoint["triangleLOD"], dtype=np.float32)
-        camera = np.concatenate(
+        inp = np.concatenate(
             (
+                np.array(datapoint["triangleLOD"], dtype=np.float32),
                 np.array(datapoint["eye"], dtype=np.float32),
                 np.array(datapoint["lookat"], dtype=np.float32),
                 np.array(datapoint["up"], dtype=np.float32),
@@ -91,10 +91,7 @@ class FoviatedLODDataset(Dataset):
         }
         return {
             "path": self.paths[idx],
-            "input": {
-                "prior_lod": prior_lod,
-                "camera": camera,
-            },
+            "input": inp,
             "output": out,
         }
 

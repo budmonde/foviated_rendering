@@ -6,17 +6,16 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from constants import DATA_PATH, get_net_path
+from constants import DATA_PATH, NUM_TRIANGLES, get_net_path
 from dataset import FoviatedLODDataset
 from network import Net
-from torch_utils import extract_labels
 from visualizer import Visualizer
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--num_epochs", type=int, default=100)
-    parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument("--lr", type=float, default=0.001)
     opt = parser.parse_args()
 
     visualizer = Visualizer(opt)
@@ -35,12 +34,15 @@ if __name__ == "__main__":
     )
 
     net = Net()
-    criterions = [nn.CrossEntropyLoss() for _ in range(722)]
+    criterion = nn.CrossEntropyLoss(reduction="none")
     optimizer = torch.optim.SGD(net.parameters(), lr=opt.lr, momentum=0.9)
 
     def calculate_acc(inps, labels, outs, acc):
         inps = inps.type(torch.LongTensor)
         acc["total"] += torch.flatten(labels).size(0)
+        acc["correct"] += (outs == labels).sum().item()
+        acc["p"] += (inps != labels).sum().item()
+        acc["n"] += (inps == labels).sum().item()
         acc["tp"] += (
             torch.logical_and(inps != labels, inps != outs).sum().item()
         )
@@ -65,19 +67,19 @@ if __name__ == "__main__":
                 inps = data["input"]
                 labels = data["output"]["updated_lod"]
                 outputs = net(inps)
-                predicted = torch.cat(
-                    [extract_labels(outs) for outs in outputs], dim=1
+                _, predicted = torch.max(outputs.data, 1)
+                calculate_acc(
+                    inps[..., :NUM_TRIANGLES], labels, predicted, val_acc
                 )
-                calculate_acc(inps["prior_lod"], labels, predicted, val_acc)
             test_acc = defaultdict(int)
             for i, data in enumerate(test_loader):
                 inps = data["input"]
                 labels = data["output"]["updated_lod"]
                 outputs = net(inps)
-                predicted = torch.cat(
-                    [extract_labels(outs) for outs in outputs], dim=1
+                _, predicted = torch.max(outputs.data, 1, keepdim=True)
+                calculate_acc(
+                    inps[..., :NUM_TRIANGLES], labels, predicted, test_acc
                 )
-                calculate_acc(inps["prior_lod"], labels, predicted, test_acc)
             visualizer.plot_current_accuracy(
                 epoch,
                 {
@@ -85,6 +87,9 @@ if __name__ == "__main__":
                     "Val: True Negative": val_acc["tn"] / val_acc["total"],
                     "Val: False Positive": val_acc["fp"] / val_acc["total"],
                     "Val: False Negative": val_acc["fn"] / val_acc["total"],
+                    "Target Positive": val_acc["p"] / val_acc["total"],
+                    "Target Negative": val_acc["n"] / val_acc["total"],
+                    "Overall Accuracy": val_acc["correct"] / val_acc["total"],
                 },
             )
 
@@ -98,9 +103,12 @@ if __name__ == "__main__":
 
             optimizer.zero_grad()
             outputs = net(inps)
-            loss = 0
-            for i in range(len(outputs)):
-                loss += criterions[i](outputs[i], labels[..., i])
+            loss_array = criterion(outputs, labels)
+
+            weights = torch.zeros(labels.shape, dtype=torch.float32)
+            weights[inps[..., :NUM_TRIANGLES] != labels] = 1.0
+
+            loss = (loss_array * weights).mean()
             loss.backward()
             optimizer.step()
 

@@ -46,9 +46,7 @@ if __name__ == "__main__":
             time_load = time.perf_counter()
             outputs = net(inps)
             time_execute = time.perf_counter()
-            predicted = torch.cat(
-                [extract_labels(outs) for outs in outputs], dim=1
-            )
+            _, predicted = torch.max(outputs.data, 1)
             time_output = time.perf_counter()
 
             timer["load"] += time_load - time_start

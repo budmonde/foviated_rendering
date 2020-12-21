@@ -3,7 +3,7 @@ DATA_PATH = "./Data/"
 
 
 def get_net_path(lr, batch_sz, epoch):
-    return f"./weights_v3/whole_scene_{lr}_{batch_sz}_{epoch}.pth"
+    return f"./weights_v4/whole_scene_{lr}_{batch_sz}_{epoch}.pth"
 
 
 CAMERA_VECTOR_DIM = 12
