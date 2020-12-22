@@ -20,6 +20,7 @@ class Visualizer:
         if not self.vis.check_connection():
             self.create_visdom_connections()
 
+        self.plot_data = {}
         self.pb = ProgressBar(total=opt.num_epochs)
 
     def create_visdom_connections(self):
@@ -34,40 +35,25 @@ class Visualizer:
     def print_progress_bar(self, epoch, counter_ratio):
         self.pb.print_progress_bar(epoch + counter_ratio)
 
-    def plot_current_losses(self, epoch, counter_ratio, losses):
-        if not hasattr(self, "loss_plot_data"):
-            self.loss_plot_data = {
+    def plot_series(self, label, win_id, x, ys):
+        if label not in self.plot_data:
+            self.plot_data[label] = {
                 "X": [],
                 "Y": [],
-                "title": "Loss over time",
-                "legend": list(losses.keys()),
+                "title": label,
+                "legend": list(ys.keys()),
                 "ylabel": "loss",
             }
-        self.loss_plot_data["X"].append(epoch + counter_ratio)
-        self.loss_plot_data["Y"].append(
-            [losses[k] for k in self.loss_plot_data["legend"]]
+        self.plot_data[label]["X"].append(x)
+        self.plot_data[label]["Y"].append(
+            [ys[k] for k in self.plot_data[label]["legend"]]
         )
-        self._plot("loss_plot_data", 0)
+        self._plot(label, win_id)
 
-    def plot_current_accuracy(self, epoch, accuracies):
-        if not hasattr(self, "accuracy_plot_data"):
-            self.accuracy_plot_data = {
-                "X": [],
-                "Y": [],
-                "title": "Accuracy over time",
-                "legend": list(accuracies.keys()),
-                "ylabel": "accuracy",
-            }
-        self.accuracy_plot_data["X"].append(epoch)
-        self.accuracy_plot_data["Y"].append(
-            [accuracies[k] for k in self.accuracy_plot_data["legend"]]
-        )
-        self._plot("accuracy_plot_data", 1)
-
-    def _plot(self, attr, win_id):
-        if not hasattr(self, attr):
-            raise Exception("Attribute %s does not exist", attr)
-        plot_data = getattr(self, attr)
+    def _plot(self, label, win_id):
+        if label not in self.plot_data:
+            raise Exception("Attribute %s does not exist", label)
+        plot_data = self.plot_data[label]
         try:
             self.vis.line(
                 X=np.stack(

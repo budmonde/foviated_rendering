@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import torch.nn as nn
 
-from constants import CAMERA_VECTOR_DIM, NUM_LOD_LEVELS, NUM_TRIANGLES
+from constants import CAMERA_VECTOR_DIM, NUM_TRIANGLES
 
 
 class Net(nn.Module):
@@ -9,14 +9,14 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.model = nn.Sequential(
             *[
-                nn.Linear(CAMERA_VECTOR_DIM + NUM_TRIANGLES, 5000),
+                nn.Linear(CAMERA_VECTOR_DIM + NUM_TRIANGLES, 800),
                 nn.ReLU(),
-                nn.Linear(5000, 5000),
+                nn.Linear(800, 800),
                 nn.ReLU(),
-                nn.Linear(5000, NUM_LOD_LEVELS * NUM_TRIANGLES),
+                nn.Linear(800, NUM_TRIANGLES),
+                nn.ReLU(),
             ]
         )
 
     def forward(self, inp):
-        out = self.model(inp)
-        return out.view(*out.shape[:-1], NUM_LOD_LEVELS, NUM_TRIANGLES)
+        return self.model(inp)

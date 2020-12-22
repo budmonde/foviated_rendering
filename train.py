@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
 import argparse
-from collections import defaultdict
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from constants import DATA_PATH, NUM_TRIANGLES, get_net_path
+from constants import DATA_PATH, NUM_POPPING_VECTORS, get_net_paths
 from dataset import FoviatedLODDataset
 from network import Net
 from visualizer import Visualizer
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--num_epochs", type=int, default=100)
-    parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--num_epochs", type=int, default=1000)
+    parser.add_argument(
+        "--lrs",
+        nargs=NUM_POPPING_VECTORS,
+        type=float,
+        default=[0.001] * NUM_POPPING_VECTORS,
+    )
     opt = parser.parse_args()
 
     visualizer = Visualizer(opt)
@@ -33,28 +37,12 @@ if __name__ == "__main__":
         test, batch_size=opt.batch_size, shuffle=True, num_workers=1
     )
 
-    net = Net()
-    criterion = nn.CrossEntropyLoss(reduction="none")
-    optimizer = torch.optim.SGD(net.parameters(), lr=opt.lr, momentum=0.9)
-
-    def calculate_acc(inps, labels, outs, acc):
-        inps = inps.type(torch.LongTensor)
-        acc["total"] += torch.flatten(labels).size(0)
-        acc["correct"] += (outs == labels).sum().item()
-        acc["p"] += (inps != labels).sum().item()
-        acc["n"] += (inps == labels).sum().item()
-        acc["tp"] += (
-            torch.logical_and(inps != labels, inps != outs).sum().item()
-        )
-        acc["tn"] += (
-            torch.logical_and(inps == labels, inps == outs).sum().item()
-        )
-        acc["fp"] += (
-            torch.logical_and(inps == labels, inps != outs).sum().item()
-        )
-        acc["fn"] += (
-            torch.logical_and(inps != labels, inps == outs).sum().item()
-        )
+    nets = [Net() for _ in range(NUM_POPPING_VECTORS)]
+    criterions = [nn.MSELoss() for _ in range(NUM_POPPING_VECTORS)]
+    optimizers = [
+        torch.optim.SGD(nets[pi].parameters(), lr=opt.lrs[pi], momentum=0.9)
+        for pi in range(NUM_POPPING_VECTORS)
+    ]
 
     total_iters = 0
     for epoch in range(1, opt.num_epochs + 1):
@@ -62,34 +50,44 @@ if __name__ == "__main__":
 
         # Validation & Test
         with torch.no_grad():
-            val_acc = defaultdict(int)
+            val_losses = [0] * NUM_POPPING_VECTORS
+            val_total = 0
             for i, data in enumerate(val_loader):
                 inps = data["input"]
-                labels = data["output"]["updated_lod"]
-                outputs = net(inps)
-                _, predicted = torch.max(outputs.data, 1)
-                calculate_acc(
-                    inps[..., :NUM_TRIANGLES], labels, predicted, val_acc
-                )
-            test_acc = defaultdict(int)
-            for i, data in enumerate(test_loader):
-                inps = data["input"]
-                labels = data["output"]["updated_lod"]
-                outputs = net(inps)
-                _, predicted = torch.max(outputs.data, 1, keepdim=True)
-                calculate_acc(
-                    inps[..., :NUM_TRIANGLES], labels, predicted, test_acc
-                )
-            visualizer.plot_current_accuracy(
+                labels = data["output"]["popping_score"]
+                for pi in range(NUM_POPPING_VECTORS):
+                    outputs = nets[pi](inps)
+                    val_losses[pi] += criterions[pi](outputs, labels[pi])
+                val_total += 1
+
+            visualizer.plot_series(
+                "validation_losses",
+                1,
                 epoch,
                 {
-                    "Val: True Positive": val_acc["tp"] / val_acc["total"],
-                    "Val: True Negative": val_acc["tn"] / val_acc["total"],
-                    "Val: False Positive": val_acc["fp"] / val_acc["total"],
-                    "Val: False Negative": val_acc["fn"] / val_acc["total"],
-                    "Target Positive": val_acc["p"] / val_acc["total"],
-                    "Target Negative": val_acc["n"] / val_acc["total"],
-                    "Overall Accuracy": val_acc["correct"] / val_acc["total"],
+                    f"Validation Loss {pi}": (val_losses[pi] / val_total)
+                    ** 0.5
+                    for pi in range(NUM_POPPING_VECTORS)
+                },
+            )
+
+            test_losses = [0] * NUM_POPPING_VECTORS
+            test_total = 0
+            for i, data in enumerate(test_loader):
+                inps = data["input"]
+                labels = data["output"]["popping_score"]
+                for pi in range(NUM_POPPING_VECTORS):
+                    outputs = nets[pi](inps)
+                    test_losses[pi] += criterions[pi](outputs, labels[pi])
+                test_total += 1
+
+            visualizer.plot_series(
+                "test_losses",
+                2,
+                epoch,
+                {
+                    f"Test Loss {pi}": (test_losses[pi] / test_total) ** 0.5
+                    for pi in range(NUM_POPPING_VECTORS)
                 },
             )
 
@@ -99,31 +97,34 @@ if __name__ == "__main__":
             epoch_iters += opt.batch_size
 
             inps = data["input"]
-            labels = data["output"]["updated_lod"]
+            labels = data["output"]["popping_score"]
 
-            optimizer.zero_grad()
-            outputs = net(inps)
-            loss_array = criterion(outputs, labels)
-
-            weights = torch.zeros(labels.shape, dtype=torch.float32)
-            weights[inps[..., :NUM_TRIANGLES] != labels] = 1.0
-
-            loss = (loss_array * weights).mean()
-            loss.backward()
-            optimizer.step()
+            losses = []
+            for pi in range(NUM_POPPING_VECTORS):
+                optimizers[pi].zero_grad()
+                outputs = nets[pi](inps)
+                loss = criterions[pi](outputs, labels[pi])
+                loss.backward()
+                optimizers[pi].step()
+                losses.append(loss.item())
 
             if total_iters % 128 == 0:
                 visualizer.print_progress_bar(
                     epoch - 1,
                     float(epoch_iters) / len(train),
                 )
-                visualizer.plot_current_losses(
-                    epoch,
-                    float(epoch_iters) / len(train),
-                    {"loss1": loss.item(), "loss2": loss.item()},
+                visualizer.plot_series(
+                    "training_loss",
+                    0,
+                    epoch + float(epoch_iters) / len(train),
+                    {
+                        f"Popping Loss {pi}": losses[pi] ** 0.5
+                        for pi in range(NUM_POPPING_VECTORS)
+                    },
                 )
 
-        if epoch % 20 == 0:
-            net_path = get_net_path(opt.lr, opt.batch_size, epoch)
-            torch.save(net.state_dict(), net_path)
-            print("Saved net at %s" % net_path)
+        if epoch % 100 == 0:
+            net_paths = get_net_paths(opt.lrs, opt.batch_size, epoch)
+            for pi in range(NUM_POPPING_VECTORS):
+                torch.save(nets[pi].state_dict(), net_paths[pi])
+            print("Saved nets at %s" % net_paths)

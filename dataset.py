@@ -5,10 +5,10 @@ import os
 import numpy as np
 from torch.utils.data import Dataset
 
-from constants import NUM_POPPING_VECTORS, NUM_TRIANGLES
+from constants import NUM_POPPING_VECTORS, NUM_TRIANGLES, DATA_PATH
 
-with open("./bad_data.txt") as f:
-    exclude_set = set(f.read().strip().split("\n"))
+# with open("./bad_data.txt") as f:
+#     exclude_set = set(f.read().strip().split("\n"))
 
 
 def convertDictToArray(dictionary):
@@ -22,7 +22,7 @@ class FoviatedLODDataset(Dataset):
     def __init__(self, root_dir, mode="train"):
         child_dirs = filter(
             lambda d: d.startswith("seq"),
-            os.listdir("./Data/"),
+            os.listdir(root_dir),
         )
 
         def get_datapoint_paths(dirname):
@@ -42,7 +42,7 @@ class FoviatedLODDataset(Dataset):
         self.paths.sort()
 
         # Excluding bad samples
-        self.paths = list(filter(lambda p: p not in exclude_set, self.paths))
+        # self.paths = list(filter(lambda p: p not in exclude_set, self.paths))
 
         # Every 10th sample will be a test sample
         if mode == "train":
@@ -86,7 +86,6 @@ class FoviatedLODDataset(Dataset):
                 convertDictToArray(datapoint["poppingScore"][i])
                 for i in range(NUM_POPPING_VECTORS)
             ],
-            "final_score": convertDictToArray(datapoint["finalScore"]),
             "updated_lod": np.array(datapoint["updatedLOD"]),
         }
         return {
@@ -97,12 +96,20 @@ class FoviatedLODDataset(Dataset):
 
 
 def debug():
-    train = FoviatedLODDataset("./Data/", mode="train")
-    print(len(train))
-    val = FoviatedLODDataset("./Data/", mode="validation")
-    print(len(val))
-    test = FoviatedLODDataset("./Data/", mode="test")
-    print(len(test))
+    train = FoviatedLODDataset(DATA_PATH, mode="train")
+    print("Training set size:", len(train))
+    val = FoviatedLODDataset(DATA_PATH, mode="validation")
+    print("Validation set size:", len(val))
+    test = FoviatedLODDataset(DATA_PATH, mode="test")
+    print("Test set size:", len(test))
+
+    scores = []
+    for data in train:
+        scores.append(data["output"]["eccentricity_score"])
+    scores = np.concatenate(scores)
+    print("Max", np.max(scores))
+    print("Median", np.median(scores))
+    print("Min", np.min(scores))
 
 
 if __name__ == "__main__":
