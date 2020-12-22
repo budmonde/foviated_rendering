@@ -2,15 +2,17 @@
 import argparse
 
 import torch
-from torch import nn
+import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from constants import DATA_PATH, get_net_paths, NUM_POPPING_VECTORS
+from constants import DATA_PATH, NUM_POPPING_VECTORS, get_net_paths
 from dataset import FoviatedLODDataset
 from network import Net
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--datapath", type=str, default=DATA_PATH)
+    parser.add_argument("--weightspath", type=str, default="./weights/")
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--num_epochs", type=int, default=1000)
     parser.add_argument(
@@ -21,13 +23,13 @@ if __name__ == "__main__":
     )
     opt = parser.parse_args()
 
-    dataset = FoviatedLODDataset(DATA_PATH, mode="test")
+    dataset = FoviatedLODDataset(opt.datapath, mode="test")
     dataloader = DataLoader(
         dataset, batch_size=opt.batch_size, shuffle=True, num_workers=1
     )
 
     nets = [Net() for _ in range(NUM_POPPING_VECTORS)]
-    net_paths = get_net_paths(opt.lrs, opt.batch_size, opt.num_epochs)
+    net_paths = get_net_paths(opt, opt.num_epochs)
     criterions = [nn.MSELoss() for _ in range(NUM_POPPING_VECTORS)]
     print(f"Loading weights in {net_paths}")
     for pi in range(NUM_POPPING_VECTORS):

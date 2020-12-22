@@ -12,6 +12,8 @@ from visualizer import Visualizer
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--datapath", type=str, default=DATA_PATH)
+    parser.add_argument("--weightspath", type=str, default="./weights/")
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--num_epochs", type=int, default=1000)
     parser.add_argument(
@@ -24,15 +26,15 @@ if __name__ == "__main__":
 
     visualizer = Visualizer(opt)
 
-    train = FoviatedLODDataset(DATA_PATH, mode="train")
+    train = FoviatedLODDataset(opt.datapath, mode="train")
     train_loader = DataLoader(
         train, batch_size=opt.batch_size, shuffle=True, num_workers=1
     )
-    val = FoviatedLODDataset(DATA_PATH, mode="validation")
+    val = FoviatedLODDataset(opt.datapath, mode="validation")
     val_loader = DataLoader(
         val, batch_size=opt.batch_size, shuffle=True, num_workers=1
     )
-    test = FoviatedLODDataset(DATA_PATH, mode="test")
+    test = FoviatedLODDataset(opt.datapath, mode="test")
     test_loader = DataLoader(
         test, batch_size=opt.batch_size, shuffle=True, num_workers=1
     )
@@ -124,7 +126,7 @@ if __name__ == "__main__":
                 )
 
         if epoch % 100 == 0:
-            net_paths = get_net_paths(opt.lrs, opt.batch_size, epoch)
+            net_paths = get_net_paths(opt, epoch)
             for pi in range(NUM_POPPING_VECTORS):
                 torch.save(nets[pi].state_dict(), net_paths[pi])
             print("Saved nets at %s" % net_paths)

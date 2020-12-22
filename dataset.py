@@ -5,7 +5,7 @@ import os
 import numpy as np
 from torch.utils.data import Dataset
 
-from constants import NUM_POPPING_VECTORS, NUM_TRIANGLES, DATA_PATH
+from constants import DATA_PATH, NUM_POPPING_VECTORS, NUM_TRIANGLES
 
 # with open("./bad_data.txt") as f:
 #     exclude_set = set(f.read().strip().split("\n"))
