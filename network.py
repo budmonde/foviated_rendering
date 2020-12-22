@@ -9,11 +9,13 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.model = nn.Sequential(
             *[
-                nn.Linear(CAMERA_VECTOR_DIM + NUM_TRIANGLES, 800),
+                nn.Linear(CAMERA_VECTOR_DIM, 100),
                 nn.ReLU(),
-                nn.Linear(800, 800),
+                nn.Linear(100, 1000),
                 nn.ReLU(),
-                nn.Linear(800, NUM_TRIANGLES),
+                nn.Linear(1000, 1000),
+                nn.ReLU(),
+                nn.Linear(1000, NUM_TRIANGLES),
                 nn.ReLU(),
             ]
         )

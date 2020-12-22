@@ -71,7 +71,7 @@ class FoviatedLODDataset(Dataset):
         datapoint = json.load(open(self.paths[idx]))
         inp = np.concatenate(
             (
-                np.array(datapoint["triangleLOD"], dtype=np.float32),
+                # np.array(datapoint["triangleLOD"], dtype=np.float32),
                 np.array(datapoint["eye"], dtype=np.float32),
                 np.array(datapoint["lookat"], dtype=np.float32),
                 np.array(datapoint["up"], dtype=np.float32),
@@ -79,14 +79,14 @@ class FoviatedLODDataset(Dataset):
             )
         )
         out = {
-            "eccentricity_score": convertDictToArray(
-                datapoint["eccentricityScore"]
-            ),
+            # "eccentricity_score": convertDictToArray(
+            #     datapoint["eccentricityScore"]
+            # ),
             "popping_score": [
                 convertDictToArray(datapoint["poppingScore"][i])
                 for i in range(NUM_POPPING_VECTORS)
             ],
-            "updated_lod": np.array(datapoint["updatedLOD"]),
+            # "updated_lod": np.array(datapoint["updatedLOD"]),
         }
         return {
             "path": self.paths[idx],
@@ -105,7 +105,7 @@ def debug():
 
     scores = []
     for data in train:
-        scores.append(data["output"]["eccentricity_score"])
+        scores.append(data["output"]["popping_score"][0])
     scores = np.concatenate(scores)
     print("Max", np.max(scores))
     print("Median", np.median(scores))
