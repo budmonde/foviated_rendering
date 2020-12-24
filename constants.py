@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 
-DATA_PATH = "./Data3/"
+DATA_PATH = "./Data4/"
 
 CAMERA_VECTOR_DIM = 12
 NUM_LOD_LEVELS = 5

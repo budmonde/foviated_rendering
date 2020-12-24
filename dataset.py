@@ -78,14 +78,26 @@ class FoviatedLODDataset(Dataset):
                 np.array(datapoint["gaze"], dtype=np.float32),
             )
         )
+        rhos = []
+        for pi in range(NUM_POPPING_VECTORS):
+            raw = convertDictToArray(datapoint["poppingScore"][pi])
+            cnt = np.array(datapoint["count"][pi]) + np.array(
+                datapoint["count"][pi + 1]
+            )
+            rho = np.divide(raw, cnt, out=np.zeros_like(raw), where=cnt != 0.0)
+            rhos.append(rho)
         out = {
             # "eccentricity_score": convertDictToArray(
             #     datapoint["eccentricityScore"]
             # ),
-            "popping_score": [
+            "popping_scores": [
                 convertDictToArray(datapoint["poppingScore"][i])
                 for i in range(NUM_POPPING_VECTORS)
             ],
+            "count": [
+                np.array(arr, dtype=np.float32) for arr in datapoint["count"]
+            ],
+            "densities": rhos,
             # "updated_lod": np.array(datapoint["updatedLOD"]),
         }
         return {
@@ -103,13 +115,26 @@ def debug():
     test = FoviatedLODDataset(DATA_PATH, mode="test")
     print("Test set size:", len(test))
 
-    scores = []
-    for data in train:
-        scores.append(data["output"]["popping_score"][0])
-    scores = np.concatenate(scores)
-    print("Max", np.max(scores))
-    print("Median", np.median(scores))
-    print("Min", np.min(scores))
+    rhos = []
+    # for data in train:
+    #     rhos.extend(data["output"]["densities"])
+    # for data in val:
+    #     rhos.extend(data["output"]["densities"])
+    for data in test:
+        rhos.extend(data["output"]["densities"])
+    rhos = np.concatenate(rhos)
+
+    rhos = rhos / 100
+
+    print("Max", np.max(rhos))
+    print("Median", np.median(rhos))
+    print("Min", np.min(rhos))
+
+    from matplotlib import pyplot as plt
+
+    plt.hist(rhos, bins=[x / 100 for x in range(-25, 25)])
+    plt.title("TARGET HISTOGRAM")
+    plt.show()
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ class Net(nn.Module):
                 nn.Linear(1000, 1000),
                 nn.ReLU(),
                 nn.Linear(1000, NUM_TRIANGLES),
-                nn.ReLU(),
+                nn.Sigmoid(),
             ]
         )
 

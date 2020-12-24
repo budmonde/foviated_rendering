@@ -61,14 +61,24 @@ if __name__ == "__main__":
         # Validation & Test
         with torch.no_grad():
             val_losses = [0] * NUM_POPPING_VECTORS
+            tot_losses = [0] * NUM_POPPING_VECTORS
             val_total = 0
             for i, data in enumerate(val_loader):
                 inps = data["input"].to(opt.device)
-                labels = data["output"]["popping_score"]
+                labels = data["output"]["densities"]
                 for pi in range(NUM_POPPING_VECTORS):
                     outputs = nets[pi](inps)
                     val_losses[pi] += criterions[pi](
-                        outputs, labels[pi].to(opt.device)
+                        outputs, labels[pi].to(opt.device) / 100
+                    )
+                    tot_losses[pi] += criterions[pi](
+                        outputs
+                        * 100
+                        * (
+                            data["output"]["count"][pi]
+                            + data["output"]["count"][pi + 1]
+                        ).to(opt.device),
+                        data["output"]["popping_scores"][pi].to(opt.device),
                     )
                 val_total += 1
 
@@ -85,21 +95,34 @@ if __name__ == "__main__":
                 },
             )
 
+            visualizer.plot_series(
+                "total_popping_score_validation_losses",
+                2,
+                epoch,
+                {
+                    f"Validation Loss {pi}": (
+                        tot_losses[pi].item() / val_total
+                    )
+                    ** 0.5
+                    for pi in range(NUM_POPPING_VECTORS)
+                },
+            )
+
             test_losses = [0] * NUM_POPPING_VECTORS
             test_total = 0
             for i, data in enumerate(test_loader):
                 inps = data["input"].to(opt.device)
-                labels = data["output"]["popping_score"]
+                labels = data["output"]["densities"]
                 for pi in range(NUM_POPPING_VECTORS):
                     outputs = nets[pi](inps)
                     test_losses[pi] += criterions[pi](
-                        outputs, labels[pi].to(opt.device)
+                        outputs, labels[pi].to(opt.device) / 100
                     )
                 test_total += 1
 
             visualizer.plot_series(
                 "test_losses",
-                2,
+                3,
                 epoch,
                 {
                     f"Test Loss {pi}": (test_losses[pi].item() / test_total)
@@ -114,13 +137,13 @@ if __name__ == "__main__":
             epoch_iters += opt.batch_size
 
             inps = data["input"].to(opt.device)
-            labels = data["output"]["popping_score"]
+            labels = data["output"]["densities"]
 
             losses = []
             for pi in range(NUM_POPPING_VECTORS):
                 optimizers[pi].zero_grad()
                 outputs = nets[pi](inps)
-                loss = criterions[pi](outputs, labels[pi].to(opt.device))
+                loss = criterions[pi](outputs, labels[pi].to(opt.device) / 100)
                 loss.backward()
                 optimizers[pi].step()
                 losses.append(loss.item())
