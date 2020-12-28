@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
+import json
 import os
 
-DATA_PATH = "./Data4/"
+DATA_PATH = "./Data1227/"
 
-CAMERA_VECTOR_DIM = 12
-NUM_LOD_LEVELS = 5
-NUM_POPPING_VECTORS = NUM_LOD_LEVELS - 1
-NUM_TRIANGLES = 722
+data = json.load(open(os.path.join(DATA_PATH, "seq0/0.json")))
+
+NUM_TRIANGLES = len(data["triangleLOD"])
+NUM_POPPING_VECTORS = len(data["poppingScore"])
+NUM_LOD_LEVELS = NUM_POPPING_VECTORS + 1
+CAMERA_VECTOR_DIM = len(data["eye"]) + len(data["lookat"]) + len(data["up"])
+GAZE_VECTOR_DIM = len(data["gaze"])
 
 
-def get_net_paths(opt, epoch):
-    return [
-        os.path.join(
-            opt.weightspath,
-            f"popping_weights_{idx}_{opt.lrs[idx]}_"
-            f"{opt.batch_size}_{epoch}.pth",
-        )
-        for idx in range(NUM_POPPING_VECTORS)
-    ]
+def get_net_path(opt, net_name, epoch):
+    root = os.path.join(opt.weightspath, net_name)
+    if not os.path.isdir(root):
+        os.makedirs(root)
+    return os.path.join(root, f"{opt.lr}_{opt.batch_size}_{epoch}.pth")

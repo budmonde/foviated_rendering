@@ -7,9 +7,6 @@ from torch.utils.data import Dataset
 
 from constants import DATA_PATH, NUM_POPPING_VECTORS, NUM_TRIANGLES
 
-# with open("./bad_data.txt") as f:
-#     exclude_set = set(f.read().strip().split("\n"))
-
 
 def convertDictToArray(dictionary):
     output = np.zeros(NUM_TRIANGLES, dtype=np.float32)
@@ -41,10 +38,8 @@ class FoviatedLODDataset(Dataset):
         ]
         self.paths.sort()
 
-        # Excluding bad samples
-        # self.paths = list(filter(lambda p: p not in exclude_set, self.paths))
-
-        # Every 10th sample will be a test sample
+        # Every 10th sample will be a validation sample
+        # All samples from seq9 will be a test sample
         if mode == "train":
             self.paths = [
                 item
@@ -69,37 +64,56 @@ class FoviatedLODDataset(Dataset):
 
     def __getitem__(self, idx):
         datapoint = json.load(open(self.paths[idx]))
-        inp = np.concatenate(
-            (
-                # np.array(datapoint["triangleLOD"], dtype=np.float32),
-                np.array(datapoint["eye"], dtype=np.float32),
-                np.array(datapoint["lookat"], dtype=np.float32),
-                np.array(datapoint["up"], dtype=np.float32),
-                np.array(datapoint["gaze"], dtype=np.float32),
-            )
-        )
-        rhos = []
-        for pi in range(NUM_POPPING_VECTORS):
-            raw = convertDictToArray(datapoint["poppingScore"][pi])
-            cnt = np.array(datapoint["count"][pi]) + np.array(
-                datapoint["count"][pi + 1]
-            )
-            rho = np.divide(raw, cnt, out=np.zeros_like(raw), where=cnt != 0.0)
-            rhos.append(rho)
-        out = {
-            # "eccentricity_score": convertDictToArray(
-            #     datapoint["eccentricityScore"]
-            # ),
-            "popping_scores": [
-                convertDictToArray(datapoint["poppingScore"][i])
-                for i in range(NUM_POPPING_VECTORS)
-            ],
-            "count": [
-                np.array(arr, dtype=np.float32) for arr in datapoint["count"]
-            ],
-            "densities": rhos,
-            # "updated_lod": np.array(datapoint["updatedLOD"]),
+
+        inp = {
+            "camera": np.concatenate(
+                (
+                    np.array(datapoint["eye"], dtype=np.float32),
+                    np.array(datapoint["lookat"], dtype=np.float32),
+                    np.array(datapoint["up"], dtype=np.float32),
+                )
+            ),
+            "gaze": np.array(datapoint["gaze"], dtype=np.float32),
         }
+
+        area = np.array(datapoint["projectedAreas"], dtype=np.float32)
+
+        def calculate_density(score):
+            return np.divide(
+                score, area, out=np.zeros_like(score), where=area != 0.0
+            )
+
+        popping_scores = [
+            np.array(datapoint["poppingScore"][pi], dtype=np.float32)
+            for pi in range(NUM_POPPING_VECTORS)
+        ]
+        popping_density_list = [
+            calculate_density(popping_scores[pi] / 40)
+            for pi in range(NUM_POPPING_VECTORS)
+        ]
+        no_mask_popping_scores = [
+            np.array(datapoint["poppingScoreNoMask"][pi], dtype=np.float32)
+            for pi in range(NUM_POPPING_VECTORS)
+        ]
+        no_mask_popping_density_list = [
+            calculate_density(no_mask_popping_scores[pi] / 50)
+            for pi in range(NUM_POPPING_VECTORS)
+        ]
+        eccentricity_score = np.array(
+            datapoint["eccentricityScore"], dtype=np.float32
+        )
+        eccentricity_density = calculate_density(eccentricity_score / 20)
+
+        out = {
+            "popping_density_list": popping_density_list,
+            "popping_score_list": popping_scores,
+            "no_mask_popping_density_list": no_mask_popping_density_list,
+            "no_mask_popping_score_list": no_mask_popping_scores,
+            "eccentricity_density": eccentricity_density,
+            "eccentricity_score": eccentricity_score,
+            "area": area,
+        }
+
         return {
             "path": self.paths[idx],
             "input": inp,
@@ -115,26 +129,42 @@ def debug():
     test = FoviatedLODDataset(DATA_PATH, mode="test")
     print("Test set size:", len(test))
 
-    rhos = []
-    # for data in train:
-    #     rhos.extend(data["output"]["densities"])
-    # for data in val:
-    #     rhos.extend(data["output"]["densities"])
+    pop_scores_0 = [[] for _ in range(NUM_TRIANGLES)]
+    pop_scores_processed = [[] for _ in range(NUM_TRIANGLES)]
     for data in test:
-        rhos.extend(data["output"]["densities"])
-    rhos = np.concatenate(rhos)
-
-    rhos = rhos / 100
-
-    print("Max", np.max(rhos))
-    print("Median", np.median(rhos))
-    print("Min", np.min(rhos))
+        for ti in range(NUM_TRIANGLES):
+            pop_scores_0[ti].append(
+                data["output"]["popping_score_list"][0][ti]
+            )
+            pop_scores_processed[ti].append(
+                data["output"]["popping_density_list"][0][ti]
+                * 40
+                * data["output"]["area"][ti]
+            )
 
     from matplotlib import pyplot as plt
 
-    plt.hist(rhos, bins=[x / 100 for x in range(-25, 25)])
-    plt.title("TARGET HISTOGRAM")
+    for ti in range(NUM_TRIANGLES):
+        plt.plot(range(len(test)), pop_scores_0[ti])
+
     plt.show()
+    densities = []
+    for data in train:
+        densities.extend(data["output"]["no_mask_popping_density_list"])
+    for data in val:
+        densities.extend(data["output"]["no_mask_popping_density_list"])
+    for data in test:
+        densities.extend(data["output"]["no_mask_popping_density_list"])
+    densities = np.array(densities)
+
+    print("Max", np.max(densities))
+    print("Median", np.median(densities))
+    print("Min", np.min(densities))
+
+    # counts, bins = np.histogram(densities)
+    # plt.hist(bins[:-1], bins, weights=counts)
+    # plt.title("TARGET HISTOGRAM")
+    # plt.show()
 
 
 if __name__ == "__main__":

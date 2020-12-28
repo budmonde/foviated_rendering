@@ -1,8 +1,5 @@
 __pycache__/
-Data/
-Data2/
-Data3/
-Data4/
+Data*/
 weights/
 bad_data.txt
 

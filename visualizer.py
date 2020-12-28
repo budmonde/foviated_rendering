@@ -17,6 +17,7 @@ class Visualizer:
         self.vis = visdom.Visdom(
             server="http://localhost", port=8097, env=opt.env
         )
+        print("Check out training progress at http://localhost:8097")
         if not self.vis.check_connection():
             self.create_visdom_connections()
 
@@ -48,6 +49,16 @@ class Visualizer:
         self.plot_data[label]["Y"].append(
             [ys[k] for k in self.plot_data[label]["legend"]]
         )
+        self._plot(label, win_id)
+
+    def plot_whole(self, label, win_id, X, Ys):
+        self.plot_data[label] = {
+            "X": X,
+            "Y": [[Ys[k][idx] for k in Ys.keys()] for idx in range(len(X))],
+            "title": label,
+            "legend": list(Ys.keys()),
+            "ylabel": "loss",
+        }
         self._plot(label, win_id)
 
     def _plot(self, label, win_id):
