@@ -15,7 +15,7 @@ else:
 class Visualizer:
     def __init__(self, opt):
         self.vis = visdom.Visdom(
-            server="http://localhost", port=8097, env="main"
+            server="http://localhost", port=8097, env=opt.env
         )
         if not self.vis.check_connection():
             self.create_visdom_connections()
@@ -55,12 +55,10 @@ class Visualizer:
             raise Exception("Attribute %s does not exist", label)
         plot_data = self.plot_data[label]
         try:
+            X, Y = self._fix_visdom_bug(plot_data)
             self.vis.line(
-                X=np.stack(
-                    [np.array(plot_data["X"])] * len(plot_data["legend"]),
-                    1,
-                ),
-                Y=np.array(plot_data["Y"]),
+                X=X,
+                Y=Y,
                 opts={
                     "title": plot_data["title"],
                     "legend": plot_data["legend"],
@@ -71,3 +69,16 @@ class Visualizer:
             )
         except VisdomExceptionBase:
             self.create_visdom_connection()
+
+    @staticmethod
+    def _fix_visdom_bug(plot_data):
+        if len(plot_data["legend"]) == 1:
+            X = np.array(plot_data["X"])
+            Y = np.array(plot_data["Y"]).flatten()
+        else:
+            X = np.stack(
+                [np.array(plot_data["X"])] * len(plot_data["legend"]),
+                1,
+            )
+            Y = np.array(plot_data["Y"])
+        return X, Y
