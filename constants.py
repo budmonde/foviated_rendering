@@ -2,7 +2,7 @@
 import json
 import os
 
-DATA_PATH = "./Data1227/"
+DATA_PATH = "./Data1228/"
 
 data = json.load(open(os.path.join(DATA_PATH, "seq0/0.json")))
 

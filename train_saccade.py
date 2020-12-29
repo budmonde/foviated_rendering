@@ -16,9 +16,9 @@ if __name__ == "__main__":
     parser.add_argument("--datapath", type=str, default=DATA_PATH)
     parser.add_argument("--weightspath", type=str, default="./weights/")
     # Training Config
-    parser.add_argument("--lr", type=float, default=0.1)
+    parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--batch_size", type=int, default=128)
-    parser.add_argument("--num_epochs", type=int, default=20)
+    parser.add_argument("--num_epochs", type=int, default=1000)
     # GPU Config
     parser.add_argument("--disable_cuda", action="store_true")
     # Visualization Config
@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
     net = SaccadeNet().to(device=opt.device)
     popping_criterions = [
-        nn.MSELoss().to(device=opt.device) for _ in range(NUM_POPPING_VECTORS)
+        nn.L1Loss().to(device=opt.device) for _ in range(NUM_POPPING_VECTORS)
     ]
     optimizer = torch.optim.SGD(net.parameters(), lr=opt.lr, momentum=0.9)
 
@@ -69,14 +69,19 @@ if __name__ == "__main__":
                 ]
 
                 outputs = net(inps)
+
+                area_mask = data["output"]["area"].to(opt.device)
+                area_mask[area_mask != 0.0] = 1.0
+
                 loss = 0
                 for pi in range(NUM_POPPING_VECTORS):
                     loss += popping_criterions[pi](
-                        outputs["no_mask_popping_density_list"][pi],
+                        outputs["no_mask_popping_density_list"][pi]
+                        * area_mask,
                         popping_labels[pi],
                     )
                 val_total += 1
-                val_loss += loss.item() ** 0.5
+                val_loss += loss.item()
 
             visualizer.plot_series(
                 "validation_losses",
@@ -97,14 +102,19 @@ if __name__ == "__main__":
                 ]
 
                 outputs = net(inps)
+
+                area_mask = data["output"]["area"].to(opt.device)
+                area_mask[area_mask != 0.0] = 1.0
+
                 loss = 0
                 for pi in range(NUM_POPPING_VECTORS):
                     loss += popping_criterions[pi](
-                        outputs["no_mask_popping_density_list"][pi],
+                        outputs["no_mask_popping_density_list"][pi]
+                        * area_mask,
                         popping_labels[pi],
                     )
                 test_total += 1
-                test_loss += loss.item() ** 0.5
+                test_loss += loss.item()
 
             visualizer.plot_series(
                 "test_losses",
@@ -128,10 +138,14 @@ if __name__ == "__main__":
 
             optimizer.zero_grad()
             outputs = net(inps)
+
+            area_mask = data["output"]["area"].to(opt.device)
+            area_mask[area_mask != 0.0] = 1.0
+
             loss = 0
             for pi in range(NUM_POPPING_VECTORS):
                 loss += popping_criterions[pi](
-                    outputs["no_mask_popping_density_list"][pi],
+                    outputs["no_mask_popping_density_list"][pi] * area_mask,
                     popping_labels[pi],
                 )
             loss.backward()
@@ -146,10 +160,10 @@ if __name__ == "__main__":
                     "training_loss",
                     0,
                     epoch + float(epoch_iters) / len(train),
-                    {"Loss": loss.item() ** 0.5},
+                    {"Loss": loss.item()},
                 )
 
-        if epoch % 20 == 0:
+        if epoch % 100 == 0:
             net_path = get_net_path(opt, "saccade_net", epoch)
             torch.save(net.state_dict(), net_path)
             print("Saved net at %s" % net_path)
